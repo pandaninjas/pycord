@@ -292,7 +292,6 @@ class DiscordWebSocket:
         # ws related stuff
         self.session_id = None
         self.sequence = None
-        self.resume_gateway_url = None
         self._zlib = zlib.decompressobj()
         self._buffer = bytearray()
         self._close_code = None
@@ -512,7 +511,6 @@ class DiscordWebSocket:
             self._trace = trace = data.get("_trace", [])
             self.sequence = msg["s"]
             self.session_id = data["session_id"]
-            self.resume_gateway_url = data["resume_gateway_url"]
             # pass back shard ID to ready handler
             data["__shard_id__"] = self.shard_id
             _log.info(

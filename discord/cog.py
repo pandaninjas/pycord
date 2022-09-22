@@ -85,13 +85,13 @@ class CogMeta(type):
 
         import abc
 
-        class CogABCMeta(discord.CogMeta, abc.ABCMeta):
+        class CogABCMeta(commands.CogMeta, abc.ABCMeta):
             pass
 
         class SomeMixin(metaclass=abc.ABCMeta):
             pass
 
-        class SomeCogMixin(SomeMixin, discord.Cog, metaclass=CogABCMeta):
+        class SomeCogMixin(SomeMixin, commands.Cog, metaclass=CogABCMeta):
             pass
 
     .. note::
@@ -102,7 +102,7 @@ class CogMeta(type):
 
         .. code-block:: python3
 
-            class MyCog(discord.Cog, name='My Cog'):
+            class MyCog(commands.Cog, name='My Cog'):
                 pass
 
     Attributes
@@ -122,12 +122,12 @@ class CogMeta(type):
 
         .. code-block:: python3
 
-            class MyCog(discord.Cog, command_attrs=dict(hidden=True)):
-                @discord.slash_command()
+            class MyCog(commands.Cog, command_attrs=dict(hidden=True)):
+                @commands.command()
                 async def foo(self, ctx):
                     pass # hidden -> True
 
-                @discord.slash_command(hidden=False)
+                @commands.command(hidden=False)
                 async def bar(self, ctx):
                     pass # hidden -> False
 
@@ -178,9 +178,12 @@ class CogMeta(type):
                 if elem in listeners:
                     del listeners[elem]
 
-                if getattr(value, "parent", None) and isinstance(value, ApplicationCommand):
-                    # Skip commands if they are a part of a group
-                    continue
+                try:
+                    if getattr(value, "parent") is not None and isinstance(value, ApplicationCommand):
+                        # Skip commands if they are a part of a group
+                        continue
+                except AttributeError:
+                    pass
 
                 is_static_method = isinstance(value, staticmethod)
                 if is_static_method:
@@ -192,15 +195,20 @@ class CogMeta(type):
                         raise TypeError(no_bot_cog.format(base, elem))
                     commands[elem] = value
 
-                # a test to see if this value is a BridgeCommand
-                if hasattr(value, "add_to") and not getattr(value, "parent", None):
+                try:
+                    # a test to see if this value is a BridgeCommand
+                    getattr(value, "add_to")
+
                     if is_static_method:
                         raise TypeError(f"Command in method {base}.{elem!r} must not be staticmethod.")
                     if elem.startswith(("cog_", "bot_")):
                         raise TypeError(no_bot_cog.format(base, elem))
 
-                    commands[f"ext_{elem}"] = value.ext_variant
-                    commands[f"application_{elem}"] = value.slash_variant
+                    commands[f"ext_{elem}"] = value.get_ext_command()
+                    commands[f"application_{elem}"] = value.get_application_command()
+                except AttributeError:
+                    # we are confident that the value is not a Bridge Command
+                    pass
 
                 if inspect.iscoroutinefunction(value):
                     try:
@@ -233,9 +241,12 @@ class CogMeta(type):
 
         # Update the Command instances dynamically as well
         for command in new_cls.__cog_commands__:
-            if isinstance(command, ApplicationCommand) and not command.guild_ids and new_cls.__cog_guild_ids__:
+            if (
+                isinstance(command, ApplicationCommand)
+                and command.guild_ids is None
+                and len(new_cls.__cog_guild_ids__) != 0
+            ):
                 command.guild_ids = new_cls.__cog_guild_ids__
-
             if not isinstance(command, SlashCommandGroup):
                 setattr(new_cls, command.callback.__name__, command)
                 parent = command.parent
@@ -468,7 +479,7 @@ class Cog(metaclass=CogMeta):
     async def cog_before_invoke(self, ctx: ApplicationContext) -> None:
         """A special method that acts as a cog local pre-invoke hook.
 
-        This is similar to :meth:`.ApplicationCommand.before_invoke`.
+        This is similar to :meth:`.Command.before_invoke`.
 
         This **must** be a coroutine.
 
@@ -483,7 +494,7 @@ class Cog(metaclass=CogMeta):
     async def cog_after_invoke(self, ctx: ApplicationContext) -> None:
         """A special method that acts as a cog local post-invoke hook.
 
-        This is similar to :meth:`.ApplicationCommand.after_invoke`.
+        This is similar to :meth:`.Command.after_invoke`.
 
         This **must** be a coroutine.
 

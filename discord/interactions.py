@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """
 The MIT License (MIT)
 
@@ -178,18 +180,15 @@ class Interaction:
 
         # TODO: there's a potential data loss here
         if self.guild_id:
-            guild = self.guild or self._state._get_guild(self.guild_id) or Object(id=self.guild_id)
+            guild = self.guild or Object(id=self.guild_id)
             try:
                 member = data["member"]  # type: ignore
             except KeyError:
                 pass
             else:
+                cache_flag = self._state.member_cache_flags.interaction
+                self.user = guild._get_and_update_member(member, int(member["user"]["id"]), cache_flag)
                 self._permissions = int(member.get("permissions", 0))
-                if not isinstance(guild, Object):
-                    cache_flag = self._state.member_cache_flags.interaction
-                    self.user = guild._get_and_update_member(member, int(member["user"]["id"]), cache_flag)
-                else:
-                    self.user = Member(state=self._state, data=member, guild=guild)
         else:
             try:
                 self.user = User(state=self._state, data=data["user"])
@@ -216,8 +215,8 @@ class Interaction:
 
     @utils.cached_slot_property("_cs_channel")
     def channel(self) -> Optional[InteractionChannel]:
-        """Optional[Union[:class:`abc.GuildChannel`, :class:`PartialMessageable`, :class:`Thread`]]: The channel the
-        interaction was sent from.
+        """Optional[Union[:class:`abc.GuildChannel`, :class:`PartialMessageable`, :class:`Thread`]]:
+        The channel the interaction was sent from.
 
         Note that due to a Discord limitation, DM channels are not resolved since there is
         no data to complete them. These are :class:`PartialMessageable` instead.
@@ -397,8 +396,7 @@ class Interaction:
         )
 
         # The message channel types should always match
-        state = _InteractionMessageState(self, self._state)
-        message = InteractionMessage(state=state, channel=self.channel, data=data)  # type: ignore
+        message = InteractionMessage(state=self._state, channel=self.channel, data=data)  # type: ignore
         if view and not view.is_finished():
             self._state.store_view(view, message.id)
 
